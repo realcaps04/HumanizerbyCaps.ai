@@ -14,8 +14,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // Local: browser calls /api → Express on :4000
+      // Production (Vercel): same /api paths are rewritten to the `api` service
       "/api": "http://localhost:4000",
       "/health": "http://localhost:4000",
     },
   },
 });
+

@@ -8,15 +8,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "npx tsc",
-    "dev": "npx tsc --watch",
-    "typecheck": "npx tsc --noEmit"
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "prepare": "tsc"
   },
   "devDependencies": {
-    "typescript": "npm:null@*"
+    "typescript": "^5.9.3"
   }
 }

@@ -16,7 +16,13 @@ import type {
 } from "@humanizer/shared";
 import { config } from "../config.js";
 
-interface AuthUser extends UserProfile {
+interface AuthUser {
+  id: string;
+  fullName: string;
+  email: string;
+  avatarUrl?: string;
+  subscriptionPlan: UserProfile["subscriptionPlan"];
+  createdAt: string;
   passwordHash: string;
   emailVerified: boolean;
 }
@@ -85,28 +91,28 @@ const LOCAL_USER_ID = "local-user";
 export const store = {
   async ensureLocalUser(): Promise<UserProfile> {
     const db = await load();
-    let user = db.users.find((u) => u.id === LOCAL_USER_ID);
-    if (!user) {
-      user = {
-        id: LOCAL_USER_ID,
-        fullName: "Local User",
-        email: "local@humanizerbycaps.ai",
-        passwordHash: "",
-        emailVerified: true,
-        subscriptionPlan: "pro",
-        createdAt: now(),
-      };
-      db.users.push(user);
-      db.subscriptions.push({
-        id: nanoid(),
-        userId: user.id,
-        plan: "pro",
-        status: "active",
-        createdAt: now(),
-        updatedAt: now(),
-      });
-      await persist();
-    }
+    const existing = db.users.find((u) => u.id === LOCAL_USER_ID);
+    if (existing) return this.toPublicUser(existing);
+
+    const user: AuthUser = {
+      id: LOCAL_USER_ID,
+      fullName: "Local User",
+      email: "local@humanizerbycaps.ai",
+      passwordHash: "",
+      emailVerified: true,
+      subscriptionPlan: "pro",
+      createdAt: now(),
+    };
+    db.users.push(user);
+    db.subscriptions.push({
+      id: nanoid(),
+      userId: user.id,
+      plan: "pro",
+      status: "active",
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    await persist();
     return this.toPublicUser(user);
   },
 

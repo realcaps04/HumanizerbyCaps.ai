@@ -26,6 +26,14 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 await store.ensureLocalUser();
 
-app.listen(config.port, () => {
-  console.log(`HumanizerbyCaps.ai API on http://localhost:${config.port} (AI: ${config.aiProvider}, auth: off)`);
-});
+// Vercel Express loads the default export. Local/dev still listens on a port.
+const isVercel = Boolean(process.env.VERCEL);
+if (!isVercel) {
+  app.listen(config.port, () => {
+    console.log(
+      `HumanizerbyCaps.ai API on http://localhost:${config.port} (AI: ${config.aiProvider}, auth: off)`,
+    );
+  });
+}
+
+export default app;
