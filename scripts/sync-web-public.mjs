@@ -2,6 +2,7 @@
  * Builds the Vite web app (unless --skip-build) and copies dist → apps/api/public.
  * Required because Vercel Express serves the UI from apps/api/public.
  */
+import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -56,17 +57,19 @@ if (fs.existsSync(webPublic)) {
   }
 }
 
-if (!fs.existsSync(path.join(apiPublic, "index.html"))) {
+const indexPath = path.join(apiPublic, "index.html");
+if (!fs.existsSync(indexPath)) {
   console.error("sync-web-public failed: apps/api/public/index.html missing after copy.");
   process.exit(1);
 }
 
-fs.writeFileSync(
-  stampPath,
-  `# UI bundle synced ${new Date().toISOString()}\n# Do not edit by hand — updated by scripts/sync-web-public.mjs\n`,
-  "utf8",
-);
+const index = fs.readFileSync(indexPath, "utf8");
+const digest = createHash("sha256").update(index).digest("hex").slice(0, 16);
+const stamp = `# UI bundle ${digest}\n# Do not edit by hand — updated by scripts/sync-web-public.mjs\n`;
+const previous = fs.existsSync(stampPath) ? fs.readFileSync(stampPath, "utf8") : "";
+if (previous !== stamp) {
+  fs.writeFileSync(stampPath, stamp, "utf8");
+}
 
-const index = fs.readFileSync(path.join(apiPublic, "index.html"), "utf8");
 const asset = index.match(/assets\/index-[^"]+\.js/);
-console.log(`Synced web → apps/api/public (${asset?.[0] ?? "bundle ok"})`);
+console.log(`Synced web → apps/api/public (${asset?.[0] ?? "bundle ok"}, stamp ${digest})`);
