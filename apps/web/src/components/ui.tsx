@@ -1,5 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import logoMark from "@/assets/logo-h.png";
 
 export function Button({
   className,
@@ -88,14 +89,16 @@ export function Logo({ className, dark }: { className?: string; dark?: boolean }
         className,
       )}
     >
-      <span
-        className={cn(
-          "flex h-7 w-7 items-center justify-center rounded-md text-xs font-bold text-white",
-          dark ? "bg-violet-500" : "bg-ink",
-        )}
-      >
-        H
-      </span>
+      <img
+        src={logoMark}
+        alt=""
+        width={512}
+        height={512}
+        decoding="async"
+        draggable={false}
+        className="h-8 w-8 shrink-0 object-contain"
+        style={{ imageRendering: "auto" }}
+      />
       <span>
         HumanizerbyCaps<span className={dark ? "text-violet-400" : "text-accent"}>.ai</span>
       </span>

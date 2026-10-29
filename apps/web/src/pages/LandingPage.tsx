@@ -584,7 +584,7 @@ export function LandingPage() {
               links: [
                 { label: "Features", href: "#tool" },
                 { label: "FAQ", href: "#faq" },
-                { label: "Settings", href: "/app/settings" },
+                { label: "Workspace", href: "/app" },
               ],
             },
             {

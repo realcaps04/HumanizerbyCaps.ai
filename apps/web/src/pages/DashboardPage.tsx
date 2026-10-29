@@ -4,7 +4,6 @@ import {
   FileText,
   FileUp,
   Loader2,
-  Settings,
   Sparkles,
   Trash2,
   Wand2,
@@ -98,13 +97,6 @@ export function DashboardPage() {
               className="hidden rounded-full px-3 py-2 text-sm text-white/60 hover:bg-white/5 hover:text-white sm:inline-flex"
             >
               Text tool
-            </Link>
-            <Link
-              to="/app/settings"
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-2 text-sm text-white/70 hover:bg-white/5 hover:text-white"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
             </Link>
             <button
               type="button"
