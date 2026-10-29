@@ -1,0 +1,24 @@
+{
+  "name": "HumanizerbyCaps.ai",
+  "short_name": "HumanizerbyCaps",
+  "description": "Free AI text and DOCX humanizer — no sign-up required.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07070b",
+  "theme_color": "#07070b",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
