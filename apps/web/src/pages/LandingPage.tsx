@@ -238,7 +238,10 @@ export function LandingPage() {
             <p className="text-sm font-medium text-violet-300">AI text & document humanizer</p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
               Humanize AI writing with{" "}
-              <span className="bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent">
+              <span
+                className="font-brand bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent"
+                style={{ fontWeight: 700 }}
+              >
                 HumanizerbyCaps.ai
               </span>
             </h1>

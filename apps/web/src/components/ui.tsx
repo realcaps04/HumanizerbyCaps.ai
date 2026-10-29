@@ -84,7 +84,7 @@ export function Logo({ className, dark }: { className?: string; dark?: boolean }
   return (
     <div
       className={cn(
-        "flex items-center gap-2 font-semibold tracking-tight",
+        "flex items-center gap-2 tracking-tight",
         dark ? "text-white" : "text-ink",
         className,
       )}
@@ -99,7 +99,7 @@ export function Logo({ className, dark }: { className?: string; dark?: boolean }
         className="h-8 w-8 shrink-0 object-contain"
         style={{ imageRendering: "auto" }}
       />
-      <span>
+      <span className="font-brand font-bold" style={{ fontWeight: 700 }}>
         HumanizerbyCaps<span className={dark ? "text-violet-400" : "text-accent"}>.ai</span>
       </span>
     </div>

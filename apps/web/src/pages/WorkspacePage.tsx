@@ -194,7 +194,7 @@ export function WorkspacePage() {
     <div className="flex h-full flex-col bg-[#07070b] text-white">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-white/10 bg-[#0b0b12]/95 px-3 backdrop-blur">
         <Link to="/app" className="shrink-0">
-          <Logo dark className="text-sm" />
+          <Logo dark />
         </Link>
         <div className="h-5 w-px bg-white/10" />
         <div className="min-w-0 flex-1">
