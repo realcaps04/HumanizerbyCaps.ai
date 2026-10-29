@@ -358,7 +358,7 @@ export async function acceptOrRejectAllEdits(
   }
 
   // Reject all: restore originals in one pass to preserve document integrity
-  let buffer = await readDocBuffer(doc.currentDocumentPath);
+  let buffer: Buffer = await readDocBuffer(doc.currentDocumentPath);
   const current = await parseDocx(buffer);
   const replacements: Array<{ index: number; newText: string }> = [];
 
@@ -376,7 +376,7 @@ export async function acceptOrRejectAllEdits(
 
   if (replacements.length > 0) {
     const applied = await applyParagraphReplacements(buffer, replacements);
-    buffer = applied.buffer;
+    buffer = Buffer.from(applied.buffer);
     await writeDocBuffer(doc.currentDocumentPath, buffer);
     paragraphCache.set(documentId, await parseDocx(buffer));
   }
