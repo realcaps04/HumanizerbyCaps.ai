@@ -238,10 +238,7 @@ export function LandingPage() {
             <p className="text-sm font-medium text-violet-300">AI text & document humanizer</p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
               Humanize AI writing with{" "}
-              <span
-                className="font-brand bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent"
-                style={{ fontWeight: 700 }}
-              >
+              <span className="bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent">
                 HumanizerbyCaps.ai
               </span>
             </h1>
@@ -593,6 +590,7 @@ export function LandingPage() {
             {
               title: "Company",
               links: [
+                { label: "Portfolio", href: "https://www.consoleprojectsbycaps.in/" },
                 { label: "Contact", href: "mailto:hello@humanizerbycaps.ai" },
                 { label: "Privacy", href: "#" },
                 { label: "Terms", href: "#" },
@@ -604,12 +602,18 @@ export function LandingPage() {
               <ul className="mt-3 space-y-2 text-sm text-white/45">
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    {link.href.startsWith("/") ? (
+                    {link.href.startsWith("/") && !link.href.startsWith("//") ? (
                       <Link to={link.href} className="hover:text-white">
                         {link.label}
                       </Link>
                     ) : (
-                      <a href={link.href} className="hover:text-white">
+                      <a
+                        href={link.href}
+                        className="hover:text-white"
+                        {...(link.href.startsWith("http")
+                          ? { target: "_blank", rel: "noopener noreferrer" }
+                          : {})}
+                      >
                         {link.label}
                       </a>
                     )}
@@ -619,8 +623,16 @@ export function LandingPage() {
             </div>
           ))}
         </div>
-        <div className="mx-auto mt-10 max-w-6xl px-6 text-xs text-white/30">
-          © {new Date().getFullYear()} HumanizerbyCaps.ai. All rights reserved.
+        <div className="mx-auto mt-10 flex max-w-6xl flex-col gap-2 px-6 text-xs text-white/30 sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} HumanizerbyCaps.ai. All rights reserved.</span>
+          <a
+            href="https://www.consoleprojectsbycaps.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white/45 hover:text-violet-300"
+          >
+            Built by Caps · consoleprojectsbycaps.in
+          </a>
         </div>
       </footer>
     </div>

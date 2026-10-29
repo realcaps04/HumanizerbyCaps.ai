@@ -1,19 +1,7 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: "Gropled";
-  src:
-    url("./assets/fonts/Gropled.woff2") format("woff2"),
-    url("./assets/fonts/Gropled.woff") format("woff"),
-    url("./assets/fonts/Gropled.ttf") format("truetype");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-brand: "Gropled", ui-sans-serif, system-ui, sans-serif;
   --color-canvas: #f4f5f7;
   --color-surface: #ffffff;
   --color-ink: #1a1a1a;
