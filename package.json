@@ -12,6 +12,10 @@
     "dev:api": "npm run dev -w @humanizer/api",
     "dev:web": "npm run dev -w @humanizer/web",
     "build": "npm run build -w @humanizer/shared && npm run build -w @humanizer/api && npm run build -w @humanizer/web",
+    "sync:web-public": "node scripts/sync-web-public.mjs",
+    "vercel-build": "node scripts/vercel-build.mjs",
+    "prepare": "node scripts/install-git-hooks.mjs",
+    "push:vercel": "npm run sync:web-public && git add apps/api/public apps/api/BUILD_STAMP && git diff --cached --quiet || git commit -m \"chore: sync web UI bundle for Vercel deploy\" && git push origin HEAD",
     "typecheck": "npm run typecheck -w @humanizer/shared && npm run typecheck -w @humanizer/api && npm run typecheck -w @humanizer/web"
   },
   "devDependencies": {

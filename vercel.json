@@ -6,11 +6,11 @@
       "framework": "express",
       "entrypoint": "src/index.ts",
       "installCommand": "cd ../.. && npm install",
-      "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && npm run build -w @humanizer/web && rm -rf apps/api/public && mkdir -p apps/api/public && cp -R apps/web/dist/. apps/api/public/ && test -f apps/api/public/index.html && cd apps/api && npx tsc",
-      "ignoreCommand": "exit 1",
+      "buildCommand": "cd ../.. && npm run vercel-build",
+      "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../web ../../packages/shared ../../vercel.json ../../scripts ../../package.json || exit 1",
       "functions": {
         "src/index.ts": {
-          "includeFiles": "{public/**,dist/**}"
+          "includeFiles": "public/**"
         }
       }
     }

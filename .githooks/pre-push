@@ -1,0 +1,19 @@
+#!/bin/sh
+# Keep apps/api/public in sync with apps/web before every push (Vercel serves UI from there).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "[pre-push] Syncing web UI → apps/api/public..."
+npm run sync:web-public
+
+if [ -n "$(git status --porcelain apps/api/public apps/api/BUILD_STAMP)" ]; then
+  git add apps/api/public apps/api/BUILD_STAMP
+  git commit -m "chore: sync web UI bundle for Vercel deploy"
+  echo ""
+  echo "[pre-push] Created a sync commit with the fresh UI bundle."
+  echo "[pre-push] Run git push again so GitHub/Vercel get that commit."
+  echo ""
+  exit 1
+fi
+
+echo "[pre-push] UI bundle already up to date — push continuing."
