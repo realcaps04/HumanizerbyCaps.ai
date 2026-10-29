@@ -1,6 +1,10 @@
-import OpenAI from "openai";
+import { OpenAI } from "openai";
 import { config } from "../../config.js";
 import type { HumanizationSettings, ParagraphBlock } from "@humanizer/shared";
+
+function createOpenAIClient() {
+  return new OpenAI({ apiKey: config.openaiApiKey });
+}
 
 export interface HumanizeRequest {
   paragraphs: ParagraphBlock[];
@@ -36,7 +40,7 @@ async function chat(system: string, user: string): Promise<string> {
   if (config.aiProvider === "mock" || !config.openaiApiKey) {
     return mockRespond(system, user);
   }
-  const client = new OpenAI({ apiKey: config.openaiApiKey });
+  const client = createOpenAIClient();
   const res = await client.chat.completions.create({
     model: config.openaiModel,
     temperature: 0.4,
@@ -181,7 +185,7 @@ export async function humanizePlainText(
   if (config.aiProvider === "mock" || !config.openaiApiKey) {
     return mockHumanize(text, settings);
   }
-  const client = new OpenAI({ apiKey: config.openaiApiKey });
+  const client = createOpenAIClient();
   const res = await client.chat.completions.create({
     model: config.openaiModel,
     temperature: 0.4,
@@ -358,7 +362,7 @@ export async function agentReply(input: {
     if (m.includes("restore") || m.includes("original")) return "I can restore the original uploaded document.";
     return "I can analyze the document, humanize all or part of it, improve readability, or restore the original. What would you like to do?";
   }
-  const client = new OpenAI({ apiKey: config.openaiApiKey });
+  const client = createOpenAIClient();
   const res = await client.chat.completions.create({
     model: config.openaiModel,
     temperature: 0.5,
