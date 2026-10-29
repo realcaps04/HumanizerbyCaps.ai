@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  Check,
   Download,
   History,
   Loader2,
   Redo2,
   Undo2,
   Columns2,
+  Wand2,
+  X,
 } from "lucide-react";
 import {
   DEFAULT_HUMANIZATION_SETTINGS,
@@ -40,6 +43,10 @@ export function WorkspacePage() {
   const [busy, setBusy] = useState(false);
   const [saveLabel, setSaveLabel] = useState("Saved");
   const [agentWidth, setAgentWidth] = useState(360);
+  const [rehumanizePrompt, setRehumanizePrompt] = useState<null | {
+    kind: "quick" | "chat";
+    message?: string;
+  }>(null);
   const dragging = useRef(false);
   const versionCursor = useRef(0);
 
@@ -77,10 +84,63 @@ export function WorkspacePage() {
     };
   }, []);
 
-  const highlights = useMemo(
-    () => edits.filter((e) => e.editStatus === "pending").map((e) => e.modifiedText),
+  const pendingEdits = useMemo(
+    () => edits.filter((e) => e.editStatus === "pending"),
     [edits],
   );
+  const highlights = useMemo(
+    () => pendingEdits.map((e) => e.modifiedText),
+    [pendingEdits],
+  );
+  const alreadyHumanized = useMemo(
+    () =>
+      edits.length > 0 ||
+      versions.length > 1 ||
+      doc?.processingStatus === "completed",
+    [edits.length, versions.length, doc?.processingStatus],
+  );
+
+  function looksLikeHumanizeRequest(message: string) {
+    return /\b(humanize|rewrite|improve readability|more professional|make this more)\b/i.test(
+      message,
+    );
+  }
+
+  async function decideAll(status: "accepted" | "rejected") {
+    await withBusy(async () => {
+      await api.updateAllEdits(id, status);
+      setEdits((prev) =>
+        prev.map((e) => (e.editStatus === "pending" ? { ...e, editStatus: status } : e)),
+      );
+      await reload();
+    });
+  }
+
+  async function runHumanize(message?: string) {
+    await withBusy(async () => {
+      if (message) {
+        await api.chat(id, message, settings);
+      } else {
+        await api.humanize(id, { settings });
+      }
+      await reload();
+    });
+  }
+
+  async function requestHumanize(kind: "quick" | "chat", message?: string) {
+    if (alreadyHumanized) {
+      setRehumanizePrompt({ kind, message });
+      return;
+    }
+    await runHumanize(message);
+  }
+
+  async function confirmRehumanize() {
+    const pending = rehumanizePrompt;
+    setRehumanizePrompt(null);
+    if (!pending) return;
+    await runHumanize(pending.kind === "chat" ? pending.message : undefined);
+  }
 
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
@@ -185,7 +245,34 @@ export function WorkspacePage() {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
+          {pendingEdits.length > 0 && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[80] flex justify-center px-3 pb-3">
+              <div className="pointer-events-auto flex max-w-full items-center gap-3 rounded-full border border-white/15 bg-[#0b0b12]/95 px-3 py-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
+                <span className="whitespace-nowrap text-xs font-medium text-white/70">
+                  Pending changes ({pendingEdits.length})
+                </span>
+                <div className="flex shrink-0 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void decideAll("accepted")}
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    <Check className="h-3 w-3" /> Accept all
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void decideAll("rejected")}
+                    className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2.5 py-1 text-[11px] text-white/75 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    <X className="h-3 w-3" /> Reject all
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {view === "compare" ? (
             <div className="grid h-full grid-cols-2">
               <div className="border-r border-white/10">
@@ -239,15 +326,22 @@ export function WorkspacePage() {
             busy={busy}
             onSettingsChange={setSettings}
             onSend={async (message) => {
+              if (looksLikeHumanizeRequest(message)) {
+                await requestHumanize("chat", message);
+                return;
+              }
               await withBusy(async () => {
                 await api.chat(id, message, settings);
                 await reload();
               });
             }}
             onQuick={async (action) => {
+              if (action === "humanize") {
+                await requestHumanize("quick");
+                return;
+              }
               await withBusy(async () => {
                 if (action === "analyze") await api.analyze(id);
-                if (action === "humanize") await api.humanize(id, { settings });
                 if (action === "quality") await api.quality(id);
                 if (action === "restore") await api.restoreOriginal(id);
                 await reload();
@@ -258,17 +352,6 @@ export function WorkspacePage() {
                 await api.updateEdit(id, editId, status);
                 setEdits((prev) =>
                   prev.map((e) => (e.id === editId ? { ...e, editStatus: status } : e)),
-                );
-                await reload();
-              });
-            }}
-            onEditDecisionAll={async (status) => {
-              await withBusy(async () => {
-                await api.updateAllEdits(id, status);
-                setEdits((prev) =>
-                  prev.map((e) =>
-                    e.editStatus === "pending" ? { ...e, editStatus: status } : e,
-                  ),
                 );
                 await reload();
               });
@@ -324,6 +407,56 @@ export function WorkspacePage() {
           </div>
         )}
       </div>
+
+      {rehumanizePrompt && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
+          onClick={() => !busy && setRehumanizePrompt(null)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rehumanize-dialog-title"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-[#12121a] p-6 shadow-[0_0_60px_rgba(109,40,217,0.25)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-300">
+              <Wand2 className="h-5 w-5" />
+            </div>
+            <h2 id="rehumanize-dialog-title" className="mt-4 text-center text-lg font-semibold">
+              Already humanized
+            </h2>
+            <p className="mt-2 text-center text-sm text-white/55">
+              This document already has humanized changes
+              {pendingEdits.length > 0
+                ? ` (${pendingEdits.length} still pending review)`
+                : ""}
+              . Running humanize again can duplicate or stack rewrites. Accept or reject
+              pending edits first, or continue only if you want another pass.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setRehumanizePrompt(null)}
+                className="h-11 flex-1 rounded-full border border-white/15 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void confirmRehumanize()}
+                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-sm font-semibold text-white hover:from-violet-500 hover:to-fuchsia-500 disabled:opacity-50"
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Humanize again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AI_DETECTION_MAX_PERCENT,
   DEFAULT_HUMANIZATION_SETTINGS,
   type DocumentAnalysisProfile,
   type DocumentEdit,
@@ -34,7 +35,6 @@ interface Props {
   onSend: (message: string) => Promise<void>;
   onQuick: (action: "analyze" | "humanize" | "quality" | "restore") => Promise<void>;
   onEditDecision: (editId: string, status: "accepted" | "rejected") => Promise<void>;
-  onEditDecisionAll: (status: "accepted" | "rejected") => Promise<void>;
 }
 
 const PROMPT_EXAMPLES = [
@@ -112,7 +112,6 @@ export function AgentPanel({
   onSend,
   onQuick,
   onEditDecision,
-  onEditDecisionAll,
 }: Props) {
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -125,12 +124,16 @@ export function AgentPanel({
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, pending.length]);
 
+  async function sendPrompt(msg: string) {
+    const text = msg.trim();
+    if (!text || busy) return;
+    setInput("");
+    await onSend(text);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || busy) return;
-    const msg = input.trim();
-    setInput("");
-    await onSend(msg);
+    await sendPrompt(input);
   }
 
   return (
@@ -259,6 +262,34 @@ export function AgentPanel({
         {quality && (
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs">
             <div className="font-medium text-violet-200">Writing quality</div>
+            {typeof quality.aiDetection?.score === "number" && (
+              <div
+                className={cn(
+                  "mt-2 rounded-lg border px-2.5 py-2",
+                  quality.aiDetection.classification === "pass"
+                    ? "border-emerald-500/40 bg-emerald-500/10"
+                    : "border-rose-500/40 bg-rose-500/10",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-white/80">AI detection</span>
+                  <span
+                    className={cn(
+                      "text-sm font-semibold",
+                      quality.aiDetection.classification === "pass"
+                        ? "text-emerald-300"
+                        : "text-rose-300",
+                    )}
+                  >
+                    {quality.aiDetection.score}%
+                    {quality.aiDetection.classification === "pass" ? " · pass" : " · fail"}
+                  </span>
+                </div>
+                <p className="mt-1 text-[10px] text-white/45">
+                  Pass requires under {AI_DETECTION_MAX_PERCENT}%. {quality.aiDetection.disclaimer}
+                </p>
+              </div>
+            )}
             <div className="mt-2 space-y-1">
               {(
                 [
@@ -281,9 +312,6 @@ export function AgentPanel({
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-[10px] text-white/35">
-              Scores are writing-quality estimates, not verified AI-detector results.
-            </p>
           </div>
         )}
 
@@ -309,29 +337,6 @@ export function AgentPanel({
 
         {pending.length > 0 && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-medium text-white/45">
-                Pending changes ({pending.length})
-              </div>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void onEditDecisionAll("accepted")}
-                  className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-                >
-                  <Check className="h-3 w-3" /> Accept all
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void onEditDecisionAll("rejected")}
-                  className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2.5 py-1 text-[11px] text-white/70 hover:bg-white/5 disabled:opacity-50"
-                >
-                  <X className="h-3 w-3" /> Reject all
-                </button>
-              </div>
-            </div>
             {pending.slice(0, 12).map((edit) => (
               <div key={edit.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-xs">
                 <div className="text-white/35 line-through">{edit.originalText.slice(0, 140)}</div>
@@ -362,6 +367,19 @@ export function AgentPanel({
       </div>
 
       <form onSubmit={submit} className="border-t border-white/10 p-3">
+        <div className="mb-2 grid grid-cols-2 gap-1.5">
+          {PROMPT_EXAMPLES.map((example) => (
+            <button
+              key={example}
+              type="button"
+              disabled={busy}
+              onClick={() => void sendPrompt(example)}
+              className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-left text-[11px] font-medium leading-tight text-white/70 transition hover:border-violet-500/45 hover:bg-violet-600/15 hover:text-white disabled:opacity-50"
+            >
+              {example}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-2">
           <input
             value={input}

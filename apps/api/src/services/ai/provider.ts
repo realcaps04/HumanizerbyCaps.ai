@@ -116,11 +116,13 @@ function findRepetitive(text: string): string[] {
 function mockHumanize(text: string, settings: HumanizationSettings): string {
   let out = text;
   const swaps: Array<[RegExp, string]> = [
-    [/\bIn conclusion,\s*/gi, "Overall, "],
-    [/\bIt is important to note that\s*/gi, ""],
-    [/\bFurthermore,\s*/gi, "Also, "],
-    [/\bMoreover,\s*/gi, "Beyond that, "],
-    [/\bIn today's world,\s*/gi, "Today, "],
+    [/\bin conclusion,?\s*/gi, "Overall, "],
+    [/\bit is important to note that\s*/gi, ""],
+    [/\bfurthermore,?\s*/gi, "Also, "],
+    [/\bmoreover,?\s*/gi, "Beyond that, "],
+    [/\bin today's world,?\s*/gi, "today "],
+    [/\bin summary,?\s*/gi, "Put simply, "],
+    [/\btherefore,?\s*/gi, "So "],
     [/\butilize\b/gi, "use"],
     [/\bleverage\b/gi, "use"],
     [/\brobust\b/gi, "strong"],
@@ -128,43 +130,58 @@ function mockHumanize(text: string, settings: HumanizationSettings): string {
     [/\bcomprehensive\b/gi, "thorough"],
     [/\bfacilitate\b/gi, "help"],
     [/\bin order to\b/gi, "to"],
+    [/\bcutting-edge\b/gi, "modern"],
+    [/\bgroundbreaking\b/gi, "notable"],
+    [/\brevolutionize\b/gi, "change"],
+    [/\ba wide variety of\b/gi, "many"],
+    [/\bvery unique\b/gi, "distinct"],
+    [/\bsubsequently\b/gi, "then"],
   ];
 
-  if (settings.intensity === "light") {
-    for (const [re, rep] of swaps.slice(0, 5)) out = out.replace(re, rep);
-  } else {
-    for (const [re, rep] of swaps) out = out.replace(re, rep);
-  }
+  for (const [re, rep] of swaps) out = out.replace(re, rep);
 
   // Capitalize sentence starts after phrase removals
   out = out.replace(/(^|[.!?]\s+)([a-z])/g, (_, a, b) => a + b.toUpperCase());
+  out = out.replace(/\s{2,}/g, " ");
+
+  if (settings.tone === "simple") {
+    out = out.replace(/\bapproximately\b/gi, "about");
+  }
+
+  // Introduce sentence-length variety + contractions (helps detection heuristic)
+  if (settings.intensity !== "light" && out.length > 80) {
+    const parts = out.split(/(?<=\.)\s+/);
+    if (parts.length > 2) {
+      const mid = Math.floor(parts.length / 2);
+      if ((parts[mid] ?? "").split(/\s+/).length > 18) {
+        parts[mid] = (parts[mid] ?? "")
+          .replace(/,\s+/, ". ")
+          .replace(/^([a-z])/, (c) => c.toUpperCase());
+      }
+      out = parts.join(" ");
+    }
+    out = out.replace(/^The\s+/, "This ").replace(/^This document\s+/i, "The piece ");
+  }
 
   if (settings.intensity === "deep") {
     out = out
-      .replace(/\s{2,}/g, " ")
-      .replace(/\bvery unique\b/gi, "distinct")
-      .replace(/\ba wide variety of\b/gi, "many");
-  }
-
-  if (settings.tone === "simple") {
-    out = out.replace(/\bapproximately\b/gi, "about").replace(/\bsubsequently\b/gi, "then");
-  }
-  if (settings.tone === "conversational") {
-    out = out.replace(/\bTherefore,\s*/gi, "So ");
-  }
-
-  // Light sentence-start variety for mock mode
-  if (out === text && settings.intensity !== "light" && text.length > 80) {
-    out = text.replace(/^The\s+/, "This ").replace(/^This document\s+/i, "The piece ");
-    if (out === text) {
-      const parts = text.split(/(?<=\.)\s+/);
-      if (parts.length > 2) {
-        out = parts.join(" ");
-      }
+      .replace(/\bThis is\b/g, "Here's")
+      .replace(/\bThere are\b/g, "You'll find")
+      .replace(/\bIt is\b/g, "It's")
+      .replace(/\bdo not\b/gi, "don't")
+      .replace(/\bcannot\b/gi, "can't")
+      .replace(/\bAlso,\s*/gi, "")
+      .replace(/\bBeyond that,\s*/gi, "And ")
+      .replace(/\bOverall,\s*/gi, "");
+    // Mix a short clause into longer runs for rhythm
+    const bits = out.split(/(?<=\.)\s+/);
+    if (bits.length >= 3) {
+      bits.splice(1, 0, "That matters.");
+      out = bits.join(" ");
     }
   }
 
-  return out.trim();
+  return out.trim().replace(/\s{2,}/g, " ");
 }
 
 export async function humanizePlainText(
@@ -258,6 +275,9 @@ export async function humanizeParagraphs(
 
   const system = `You are a professional humanization engine for Word documents.
 Rewrite unnatural or robotic prose across the FULL document batch provided.
+PRIMARY GOAL: make the writing read as human so AI-detection likelihood stays under 15%.
+Vary sentence length and openings, remove formulaic transitions, avoid buzzwords
+(delve, leverage, robust, comprehensive, furthermore, moreover, in today's world).
 Preserve meaning, facts, numbers, names, citations, terminology, and paragraph identity.
 Return JSON: { "replacements": [{ "id", "index", "originalText", "modifiedText" }], "summary": string }.
 Include every paragraph you change. Do not skip paragraphs because the document is long.
@@ -269,7 +289,7 @@ Intensity: ${req.settings.intensity}. Tone: ${req.settings.tone}.`;
       settings: req.settings,
       instruction:
         req.instruction ??
-        "Humanize the entire document for natural, fluent writing. Preserve meaning, numbers, names, citations, and technical terms. Process every paragraph in this batch.",
+        "Humanize the entire document so it sounds naturally human (AI detection target under 15%). Preserve meaning, numbers, names, citations, and technical terms. Process every paragraph in this batch.",
       batch: `${i + 1}/${batches.length}`,
       paragraphs: batch.map((p) => ({
         id: p.id,

@@ -1,0 +1,14 @@
+{
+  "folders": [
+    {
+      "name": "HumanizerbyCaps.ai",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "git.enabled": true,
+    "git.autoRepositoryDetection": "openEditors",
+    "git.openRepositoryInParentFolders": "never",
+    "git.repositoryScanMaxDepth": 1
+  }
+}

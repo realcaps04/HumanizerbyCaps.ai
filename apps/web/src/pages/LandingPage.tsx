@@ -134,8 +134,8 @@ const FAQS = [
     a: "No. Sign-in is not required. Everything runs in a local workspace so you can start immediately.",
   },
   {
-    q: "Are AI detector scores guaranteed?",
-    a: "No. Detector estimates are never fabricated or guaranteed. The product optimizes for high-quality, natural writing—not detector claims.",
+    q: "What AI detection target do you use?",
+    a: "Every humanized document must score under 15% on our AI-likelihood check. If it cannot after retries, humanization is marked as failed.",
   },
 ];
 

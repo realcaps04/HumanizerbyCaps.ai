@@ -2,9 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import {
+  AI_DETECTION_MAX_PERCENT,
   DEFAULT_HUMANIZATION_SETTINGS,
+  HUMANIZE_MAX_ATTEMPTS,
   PLAN_LIMITS,
   type DocumentAnalysisProfile,
+  type HumanizationIntensity,
   type HumanizationSettings,
   type WritingQualityReport,
 } from "@humanizer/shared";
@@ -20,6 +23,12 @@ import {
   evaluateQuality,
   humanizeParagraphs,
 } from "./ai/provider.js";
+import { detectAiProbability, paragraphsToDetectionText } from "./ai/detect.js";
+
+function escalateIntensity(current: HumanizationIntensity): HumanizationIntensity {
+  if (current === "light") return "balanced";
+  return "deep";
+}
 
 const analysisCache = new Map<string, DocumentAnalysisProfile>();
 const qualityCache = new Map<string, WritingQualityReport>();
@@ -203,24 +212,103 @@ export async function runHumanize(
       );
     }
 
-    await store.updateJob(job.id, { progress: 10 });
-    const result = await humanizeParagraphs({
-      paragraphs: targets,
-      settings,
-      instruction: options.instruction,
-      selectionIds: targets.map((p) => p.id),
-      onBatchProgress: async (done, total) => {
-        const pct = 10 + Math.round((done / Math.max(total, 1)) * 50);
-        await store.updateJob(job.id, { progress: pct });
-      },
-    });
+    const sourceBuffer = await readDocBuffer(doc.currentDocumentPath);
+    let attemptSettings = { ...settings };
+    let lastScore = 100;
+    let lastDetectionService = "humanizer-heuristic";
+    let nextBuffer = sourceBuffer;
+    let flagged: Array<{ index: number; reason: string }> = [];
+    let result: Awaited<ReturnType<typeof humanizeParagraphs>> = {
+      replacements: [],
+      summary: "",
+    };
+    let attempt = 0;
 
-    await store.updateJob(job.id, { progress: 65 });
-    const buffer = await readDocBuffer(doc.currentDocumentPath);
-    const { buffer: nextBuffer, flagged } = await applyParagraphReplacements(
-      buffer,
-      result.replacements.map((r) => ({ index: r.index, newText: r.modifiedText })),
-    );
+    for (attempt = 1; attempt <= HUMANIZE_MAX_ATTEMPTS; attempt++) {
+      await store.updateDocument(documentId, userId, { processingStatus: "humanizing" });
+      const progressBase = 10 + (attempt - 1) * Math.floor(50 / HUMANIZE_MAX_ATTEMPTS);
+      await store.updateJob(job.id, { progress: progressBase });
+
+      const attemptInstruction =
+        attempt === 1
+          ? options.instruction
+          : [
+              options.instruction,
+              `Retry ${attempt}/${HUMANIZE_MAX_ATTEMPTS}: previous AI-detection estimate was ${lastScore}%.`,
+              `Rewrite more aggressively so estimated AI detection is under ${AI_DETECTION_MAX_PERCENT}%.`,
+              "Break uniform rhythm, drop formulaic transitions, and sound naturally human.",
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+      result = await humanizeParagraphs({
+        paragraphs: targets,
+        settings: attemptSettings,
+        instruction: attemptInstruction,
+        selectionIds: targets.map((p) => p.id),
+        onBatchProgress: async (done, total) => {
+          const span = Math.floor(45 / HUMANIZE_MAX_ATTEMPTS);
+          const pct =
+            progressBase + Math.round((done / Math.max(total, 1)) * span);
+          await store.updateJob(job.id, { progress: Math.min(pct, 70) });
+        },
+      });
+
+      await store.updateDocument(documentId, userId, { processingStatus: "verifying" });
+      await store.updateJob(job.id, { progress: 72 + attempt * 5 });
+
+      // Always apply against the pre-humanize source so retries don't stack noise
+      const applied = await applyParagraphReplacements(
+        sourceBuffer,
+        result.replacements.map((r) => ({ index: r.index, newText: r.modifiedText })),
+      );
+      nextBuffer = Buffer.from(applied.buffer);
+      flagged = applied.flagged;
+
+      const rewritten = await parseDocx(nextBuffer);
+      const detection = await detectAiProbability(
+        paragraphsToDetectionText(rewritten.paragraphs),
+      );
+      lastScore = detection.score;
+      lastDetectionService = detection.service;
+
+      if (detection.classification === "pass") {
+        // Cache quality with the verified AI score for the UI
+        const qualityScores = await evaluateQuality(rewritten.paragraphs);
+        qualityCache.set(documentId, {
+          documentId,
+          ...qualityScores,
+          createdAt: new Date().toISOString(),
+          aiDetection: {
+            service: detection.service,
+            score: detection.score,
+            classification: detection.classification,
+            analyzedAt: detection.analyzedAt,
+            disclaimer: detection.disclaimer,
+            attempts: attempt,
+          },
+        });
+        break;
+      }
+
+      if (attempt < HUMANIZE_MAX_ATTEMPTS) {
+        attemptSettings = {
+          ...attemptSettings,
+          intensity: escalateIntensity(attemptSettings.intensity),
+          preserveStyle: false,
+          avoidVocabChanges: false,
+        };
+      }
+    }
+
+    if (lastScore >= AI_DETECTION_MAX_PERCENT) {
+      throw new Error(
+        `Humanization failed: AI detection estimated at ${lastScore}% after ${HUMANIZE_MAX_ATTEMPTS} attempt(s). ` +
+          `Required: below ${AI_DETECTION_MAX_PERCENT}%.`,
+      );
+    }
+
+    await store.updateJob(job.id, { progress: 88 });
 
     const versions = await store.listVersions(documentId, userId);
     const versionNumber = (versions[0]?.versionNumber ?? 1) + 1;
@@ -233,25 +321,20 @@ export async function runHumanize(
       userId,
       versionNumber,
       storagePath: versionRel,
-      changeDescription: result.summary,
+      changeDescription: `${result.summary} AI detection ${lastScore}% (pass < ${AI_DETECTION_MAX_PERCENT}%).`,
     });
 
     const edits = await store.createEdits(
-      result.replacements.map((r) => {
-        const flag = flagged.find((f) => f.index === r.index);
-        return {
-          documentId,
-          versionId: version.id,
-          originalText: r.originalText,
-          modifiedText: r.modifiedText,
-          paragraphIdentifier: r.id,
-          editStatus: "pending" as const,
-          ...(flag ? {} : {}),
-        };
-      }),
+      result.replacements.map((r) => ({
+        documentId,
+        versionId: version.id,
+        originalText: r.originalText,
+        modifiedText: r.modifiedText,
+        paragraphIdentifier: r.id,
+        editStatus: "pending" as const,
+      })),
     );
 
-    // Annotate flagged paragraphs in cache
     for (const f of flagged) {
       const p = parsed.paragraphs.find((x) => x.index === f.index);
       if (p) {
@@ -260,10 +343,8 @@ export async function runHumanize(
       }
     }
 
-    // Refresh paragraph cache from new buffer
     paragraphCache.set(documentId, await parseDocx(nextBuffer));
     analysisCache.delete(documentId);
-    qualityCache.delete(documentId);
 
     const words = result.replacements.reduce((n, r) => n + countWords(r.modifiedText), 0);
     await store.addUsage({
@@ -289,10 +370,20 @@ export async function runHumanize(
         : "";
     await store.appendChat(documentId, {
       role: "assistant",
-      content: `${result.summary}${flagNote} Review and accept or reject each change.`,
+      content:
+        `${result.summary}${flagNote} AI detection: ${lastScore}% ` +
+        `(pass requires < ${AI_DETECTION_MAX_PERCENT}%, via ${lastDetectionService}, attempt ${attempt}). ` +
+        `Review and accept or reject each change.`,
     });
 
-    return { version, edits, flagged, summary: result.summary, jobId: job.id };
+    return {
+      version,
+      edits,
+      flagged,
+      summary: result.summary,
+      jobId: job.id,
+      aiDetectionScore: lastScore,
+    };
   } catch (err) {
     await store.updateJob(job.id, {
       status: "failed",
@@ -442,12 +533,20 @@ export async function restoreVersion(documentId: string, userId: string, version
 export async function runQuality(documentId: string, userId: string) {
   const { parsed } = await getParsed(documentId, userId);
   const scores = await evaluateQuality(parsed.paragraphs);
+  const detection = await detectAiProbability(
+    paragraphsToDetectionText(parsed.paragraphs),
+  );
   const report: WritingQualityReport = {
     documentId,
     ...scores,
     createdAt: new Date().toISOString(),
-    // Optional detector slot — never fabricate third-party scores
-    aiDetection: undefined,
+    aiDetection: {
+      service: detection.service,
+      score: detection.score,
+      classification: detection.classification,
+      analyzedAt: detection.analyzedAt,
+      disclaimer: detection.disclaimer,
+    },
   };
   qualityCache.set(documentId, report);
   return report;

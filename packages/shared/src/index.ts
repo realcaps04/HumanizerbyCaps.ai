@@ -58,6 +58,12 @@ export const DEFAULT_HUMANIZATION_SETTINGS: HumanizationSettings = {
   onlySelectedContent: false,
 };
 
+/** Humanize succeeds only when estimated AI-detection % is strictly below this. */
+export const AI_DETECTION_MAX_PERCENT = 15;
+
+/** How many escalate-and-retry passes runHumanize may attempt before failing. */
+export const HUMANIZE_MAX_ATTEMPTS = 3;
+
 export interface UserProfile {
   id: string;
   fullName: string;
@@ -215,10 +221,12 @@ export interface WritingQualityReport {
   repetitiveLanguage: number;
   aiDetection?: {
     service: string;
+    /** Estimated AI probability 0–100. Pass requires score < AI_DETECTION_MAX_PERCENT. */
     score?: number;
-    classification?: string;
+    classification?: "pass" | "fail" | string;
     analyzedAt: string;
     disclaimer: string;
+    attempts?: number;
   };
   createdAt: string;
 }
