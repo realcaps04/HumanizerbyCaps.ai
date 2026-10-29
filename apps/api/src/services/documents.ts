@@ -317,8 +317,6 @@ export async function acceptOrRejectEdit(
 
   if (status === "rejected") {
     // Re-apply original text for that paragraph into current doc
-    const { parsed } = await getParsed(documentId, userId);
-    // Find by matching modified text / identifier is fragile after reparse — use original from edit
     const buffer = await readDocBuffer(doc.currentDocumentPath);
     const current = await parseDocx(buffer);
     const match = current.paragraphs.find(
@@ -333,6 +331,68 @@ export async function acceptOrRejectEdit(
     }
   }
   return edit;
+}
+
+export async function acceptOrRejectAllEdits(
+  documentId: string,
+  userId: string,
+  status: "accepted" | "rejected",
+) {
+  const doc = await store.getDocument(documentId, userId);
+  if (!doc) throw new Error("Document not found");
+
+  const pending = (await store.listEdits(documentId)).filter((e) => e.editStatus === "pending");
+  if (pending.length === 0) return { updated: 0, edits: [] as Awaited<ReturnType<typeof store.listEdits>> };
+
+  if (status === "accepted") {
+    const edits = [];
+    for (const edit of pending) {
+      const updated = await store.updateEdit(edit.id, documentId, { editStatus: "accepted" });
+      if (updated) edits.push(updated);
+    }
+    await store.appendChat(documentId, {
+      role: "assistant",
+      content: `Accepted all ${edits.length} pending change(s).`,
+    });
+    return { updated: edits.length, edits };
+  }
+
+  // Reject all: restore originals in one pass to preserve document integrity
+  let buffer = await readDocBuffer(doc.currentDocumentPath);
+  const current = await parseDocx(buffer);
+  const replacements: Array<{ index: number; newText: string }> = [];
+
+  for (const edit of pending) {
+    const needle = edit.modifiedText.trim();
+    const match = current.paragraphs.find(
+      (p) =>
+        p.text === edit.modifiedText ||
+        (needle.length > 0 && p.text.includes(needle.slice(0, Math.min(60, needle.length)))),
+    );
+    if (match) {
+      replacements.push({ index: match.index, newText: edit.originalText });
+    }
+  }
+
+  if (replacements.length > 0) {
+    const applied = await applyParagraphReplacements(buffer, replacements);
+    buffer = applied.buffer;
+    await writeDocBuffer(doc.currentDocumentPath, buffer);
+    paragraphCache.set(documentId, await parseDocx(buffer));
+  }
+
+  const edits = [];
+  for (const edit of pending) {
+    const updated = await store.updateEdit(edit.id, documentId, { editStatus: "rejected" });
+    if (updated) edits.push(updated);
+  }
+
+  await store.appendChat(documentId, {
+    role: "assistant",
+    content: `Rejected all ${edits.length} pending change(s) and restored original wording.`,
+  });
+
+  return { updated: edits.length, edits };
 }
 
 export async function restoreOriginal(documentId: string, userId: string) {

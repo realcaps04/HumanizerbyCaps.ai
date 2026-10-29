@@ -9,4 +9,5 @@ data/db.json
 .DS_Store
 apps/web/dist
 apps/api/dist
+apps/api/public
 packages/shared/dist

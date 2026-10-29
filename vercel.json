@@ -1,37 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "services": {
-    "api": {
+    "app": {
       "root": "apps/api",
       "framework": "express",
       "entrypoint": "src/index.ts",
       "installCommand": "cd ../.. && npm install",
-      "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && cd apps/api && npx tsc"
-    },
-    "web": {
-      "root": "apps/web",
-      "framework": "vite",
-      "installCommand": "cd ../.. && npm install",
-      "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && cd apps/web && npx tsc -b && npx vite build"
+      "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && npm run build -w @humanizer/web && rm -rf apps/api/public && mkdir -p apps/api/public && cp -R apps/web/dist/. apps/api/public/ && cd apps/api && npx tsc",
+      "functions": {
+        "src/index.ts": {
+          "includeFiles": "public/**"
+        }
+      }
     }
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": {
-        "service": "api"
-      }
-    },
-    {
-      "source": "/health",
-      "destination": {
-        "service": "api"
-      }
-    },
-    {
       "source": "/(.*)",
       "destination": {
-        "service": "web"
+        "service": "app"
       }
     }
   ]

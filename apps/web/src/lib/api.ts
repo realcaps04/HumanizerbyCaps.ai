@@ -109,6 +109,12 @@ export const api = {
       body: JSON.stringify({ status }),
     });
   },
+  updateAllEdits(id: string, status: "accepted" | "rejected") {
+    return request<{ updated: number }>(`/api/documents/${id}/edits/bulk`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+  },
   restoreOriginal(id: string) {
     return request<{ document: DocumentRecord }>(`/api/documents/${id}/restore-original`, {
       method: "POST",

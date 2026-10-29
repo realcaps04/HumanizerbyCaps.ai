@@ -34,6 +34,71 @@ interface Props {
   onSend: (message: string) => Promise<void>;
   onQuick: (action: "analyze" | "humanize" | "quality" | "restore") => Promise<void>;
   onEditDecision: (editId: string, status: "accepted" | "rejected") => Promise<void>;
+  onEditDecisionAll: (status: "accepted" | "rejected") => Promise<void>;
+}
+
+const PROMPT_EXAMPLES = [
+  "Humanize the entire document",
+  "Humanize the introduction",
+  "Make this more professional",
+  "Improve readability",
+  "Restore original",
+] as const;
+
+function useTypingPlaceholder(examples: readonly string[], active: boolean) {
+  const [text, setText] = useState(examples[0] ?? "");
+  const indexRef = useRef(0);
+
+  useEffect(() => {
+    if (!active) {
+      setText(examples[indexRef.current] ?? examples[0] ?? "");
+      return;
+    }
+
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      setText(examples[0] ?? "");
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId = 0;
+
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => {
+        timeoutId = window.setTimeout(resolve, ms);
+      });
+
+    const typeLoop = async () => {
+      while (!cancelled) {
+        const full = examples[indexRef.current] ?? "";
+        for (let i = 1; i <= full.length; i++) {
+          if (cancelled) return;
+          setText(full.slice(0, i));
+          await wait(36);
+        }
+        await wait(1600);
+        for (let i = full.length; i >= 0; i--) {
+          if (cancelled) return;
+          setText(full.slice(0, i));
+          await wait(22);
+        }
+        await wait(350);
+        indexRef.current = (indexRef.current + 1) % examples.length;
+      }
+    };
+
+    void typeLoop();
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [active, examples]);
+
+  return text || examples[0] || "";
 }
 
 export function AgentPanel({
@@ -47,11 +112,14 @@ export function AgentPanel({
   onSend,
   onQuick,
   onEditDecision,
+  onEditDecisionAll,
 }: Props) {
   const [input, setInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const pending = edits.filter((e) => e.editStatus === "pending");
+  const placeholder = useTypingPlaceholder(PROMPT_EXAMPLES, !input && !inputFocused && !busy);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -241,8 +309,28 @@ export function AgentPanel({
 
         {pending.length > 0 && (
           <div className="space-y-2">
-            <div className="text-xs font-medium text-white/45">
-              Pending changes ({pending.length})
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium text-white/45">
+                Pending changes ({pending.length})
+              </div>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onEditDecisionAll("accepted")}
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  <Check className="h-3 w-3" /> Accept all
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onEditDecisionAll("rejected")}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2.5 py-1 text-[11px] text-white/70 hover:bg-white/5 disabled:opacity-50"
+                >
+                  <X className="h-3 w-3" /> Reject all
+                </button>
+              </div>
             </div>
             {pending.slice(0, 12).map((edit) => (
               <div key={edit.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-xs">
@@ -278,9 +366,12 @@ export function AgentPanel({
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Humanize the introduction…"
-            className="h-10 flex-1 rounded-full border border-white/10 bg-[#12121a] px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-violet-500/60"
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+            placeholder={placeholder}
+            className="h-10 flex-1 rounded-full border border-white/10 bg-[#12121a] px-4 text-sm text-white outline-none placeholder:text-white/35 focus:border-violet-500/60"
             disabled={busy}
+            aria-label="Ask the AI agent"
           />
           <button
             type="submit"

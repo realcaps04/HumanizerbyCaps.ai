@@ -256,6 +256,20 @@ export function WorkspacePage() {
             onEditDecision={async (editId, status) => {
               await withBusy(async () => {
                 await api.updateEdit(id, editId, status);
+                setEdits((prev) =>
+                  prev.map((e) => (e.id === editId ? { ...e, editStatus: status } : e)),
+                );
+                await reload();
+              });
+            }}
+            onEditDecisionAll={async (status) => {
+              await withBusy(async () => {
+                await api.updateAllEdits(id, status);
+                setEdits((prev) =>
+                  prev.map((e) =>
+                    e.editStatus === "pending" ? { ...e, editStatus: status } : e,
+                  ),
+                );
                 await reload();
               });
             }}

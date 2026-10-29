@@ -75,8 +75,11 @@ export function DashboardPage() {
     }
   }
 
+  const unlimited =
+    !!stats &&
+    (stats.wordAllowance >= Number.MAX_SAFE_INTEGER / 2 || !Number.isFinite(stats.wordAllowance));
   const usagePct =
-    stats && stats.wordAllowance > 0
+    stats && stats.wordAllowance > 0 && !unlimited
       ? Math.min(100, Math.round((stats.wordsUsedThisMonth / stats.wordAllowance) * 100))
       : 0;
 
@@ -155,16 +158,20 @@ export function DashboardPage() {
             </div>
             <div className="mt-2 text-2xl font-semibold tracking-tight">
               {stats
-                ? `${formatNumber(stats.wordsUsedThisMonth)} / ${formatNumber(stats.wordAllowance)}`
+                ? unlimited
+                  ? `${formatNumber(stats.wordsUsedThisMonth)} / Unlimited`
+                  : `${formatNumber(stats.wordsUsedThisMonth)} / ${formatNumber(stats.wordAllowance)}`
                 : "—"}
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
-                style={{ width: `${usagePct}%` }}
+                style={{ width: unlimited ? "100%" : `${usagePct}%` }}
               />
             </div>
-            <p className="mt-2 text-xs capitalize text-white/40">{stats?.plan ?? "pro"} plan · free</p>
+            <p className="mt-2 text-xs capitalize text-white/40">
+              {stats?.plan ?? "pro"} plan · {unlimited ? "unlimited" : "free"}
+            </p>
           </div>
         </div>
 

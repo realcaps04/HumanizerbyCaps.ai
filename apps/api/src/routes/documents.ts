@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { DEFAULT_HUMANIZATION_SETTINGS, PLAN_LIMITS } from "@humanizer/shared";
@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import { store } from "../db/store.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import {
+  acceptOrRejectAllEdits,
   acceptOrRejectEdit,
   getCachedAnalysis,
   getCachedQuality,
@@ -160,13 +161,46 @@ documentsRouter.post("/:id/quality", async (req: AuthedRequest, res) => {
   }
 });
 
-documentsRouter.post("/:id/edits/:editId", async (req: AuthedRequest, res) => {
+async function handleBulkEdits(req: AuthedRequest, res: Response) {
   const status = req.body?.status;
   if (status !== "accepted" && status !== "rejected") {
     return res.status(400).json({ error: "status must be accepted or rejected" });
   }
   try {
-    const edit = await acceptOrRejectEdit(req.params.id, req.user!.id, req.params.editId, status);
+    const result = await acceptOrRejectAllEdits(req.params.id, req.user!.id, status);
+    // Keep payload small — client reloads the document for full edit state
+    res.json({ updated: result.updated });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Bulk update failed" });
+  }
+}
+
+// Accept/reject all pending edits
+documentsRouter.post("/:id/edits", async (req: AuthedRequest, res) => {
+  if (req.body?.scope !== "all") {
+    return res.status(400).json({ error: "scope must be 'all' for collection updates" });
+  }
+  return handleBulkEdits(req, res);
+});
+
+// Alias kept so older clients posting /edits/bulk still work
+documentsRouter.post("/:id/edits/bulk", handleBulkEdits);
+
+documentsRouter.post("/:id/edits/:editId", async (req: AuthedRequest, res) => {
+  const status = req.body?.status;
+  if (status !== "accepted" && status !== "rejected") {
+    return res.status(400).json({ error: "status must be accepted or rejected" });
+  }
+  if (req.params.editId === "bulk" || req.params.editId === "all") {
+    return handleBulkEdits(req, res);
+  }
+  try {
+    const edit = await acceptOrRejectEdit(
+      req.params.id,
+      req.user!.id,
+      decodeURIComponent(req.params.editId),
+      status,
+    );
     res.json({ edit });
   } catch (err) {
     res.status(400).json({ error: err instanceof Error ? err.message : "Update failed" });
