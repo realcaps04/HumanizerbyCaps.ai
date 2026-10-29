@@ -31,6 +31,38 @@ body,
   html {
     scroll-behavior: auto;
   }
+
+  .press-marquee-track {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+@keyframes press-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.press-marquee {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+.press-marquee-track {
+  display: flex;
+  width: max-content;
+  gap: 3.25rem;
+  align-items: center;
+  animation: press-marquee 90s linear infinite;
+}
+
+.press-marquee:hover .press-marquee-track {
+  animation-play-state: paused;
 }
 
 body {

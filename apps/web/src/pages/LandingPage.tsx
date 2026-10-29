@@ -19,6 +19,72 @@ import { api } from "@/lib/api";
 import { Logo } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
+const PRESS_LOGOS = [
+  { name: "Forbes", src: "/press/forbes.svg", height: 22 },
+  { name: "Business Insider", src: "/press/business-insider.svg", height: 18 },
+  { name: "Yahoo", src: "/press/yahoo.svg", height: 24 },
+  { name: "Product Hunt", src: "/press/product-hunt.svg", height: 26 },
+  { name: "Medium", src: "/press/medium.svg", height: 24 },
+  { name: "TechCrunch", src: "/press/techcrunch.svg", height: 20 },
+  { name: "WIRED", src: "/press/wired.svg", height: 18 },
+  { name: "The Verge", src: "/press/the-verge.svg", height: 20 },
+  { name: "Mashable", src: "/press/mashable.svg", height: 20 },
+  { name: "CNET", src: "/press/cnet.svg", height: 20 },
+  { name: "Engadget", src: "/press/engadget.svg", height: 20 },
+  { name: "Fast Company", src: "/press/fast-company.svg", height: 18 },
+  { name: "Inc.", src: "/press/inc.svg", height: 22 },
+  { name: "Hacker News", src: "/press/hacker-news.svg", height: 26 },
+  { name: "Reddit", src: "/press/reddit.svg", height: 26 },
+  { name: "Gizmodo", src: "/press/gizmodo.svg", height: 20 },
+  { name: "Lifehacker", src: "/press/lifehacker.svg", height: 18 },
+  { name: "VentureBeat", src: "/press/venturebeat.svg", height: 18 },
+  { name: "ZDNET", src: "/press/zdnet.svg", height: 20 },
+  { name: "Ars Technica", src: "/press/ars-technica.svg", height: 18 },
+  { name: "Bloomberg", src: "/press/bloomberg.svg", height: 20 },
+  { name: "Reuters", src: "/press/reuters.svg", height: 20 },
+  { name: "Axios", src: "/press/axios.svg", height: 22 },
+  { name: "POLITICO", src: "/press/politico.svg", height: 18 },
+  { name: "The Atlantic", src: "/press/the-atlantic.svg", height: 18 },
+  { name: "The Guardian", src: "/press/guardian.svg", height: 18 },
+  { name: "BBC", src: "/press/bbc.svg", height: 22 },
+  { name: "CNN", src: "/press/cnn.svg", height: 22 },
+  { name: "The New York Times", src: "/press/nytimes.svg", height: 16 },
+  { name: "WSJ", src: "/press/wsj.svg", height: 14 },
+  { name: "Entrepreneur", src: "/press/entrepreneur.svg", height: 18 },
+  { name: "Harvard Business Review", src: "/press/harvard-business-review.svg", height: 14 },
+  { name: "MIT Technology Review", src: "/press/mit-technology-review.svg", height: 14 },
+  { name: "Smashing Magazine", src: "/press/smashing-magazine.svg", height: 16 },
+  { name: "CSS-Tricks", src: "/press/css-tricks.svg", height: 18 },
+  { name: "DEV", src: "/press/devto.svg", height: 22 },
+  { name: "Hashnode", src: "/press/hashnode.svg", height: 18 },
+  { name: "Substack", src: "/press/substack.svg", height: 18 },
+  { name: "GitHub", src: "/press/github.svg", height: 20 },
+  { name: "Vercel", src: "/press/vercel.svg", height: 20 },
+  { name: "OpenAI", src: "/press/openai.svg", height: 20 },
+  { name: "Anthropic", src: "/press/anthropic.svg", height: 18 },
+  { name: "Google", src: "/press/google.svg", height: 20 },
+  { name: "Microsoft", src: "/press/microsoft.svg", height: 18 },
+  { name: "Amazon", src: "/press/amazon.svg", height: 20 },
+  { name: "Apple", src: "/press/apple.svg", height: 20 },
+  { name: "LinkedIn", src: "/press/linkedin.svg", height: 18 },
+  { name: "YouTube", src: "/press/youtube.svg", height: 18 },
+  { name: "TikTok", src: "/press/tiktok.svg", height: 20 },
+  { name: "Spotify", src: "/press/spotify.svg", height: 20 },
+  { name: "Stripe", src: "/press/stripe.svg", height: 20 },
+  { name: "Figma", src: "/press/figma.svg", height: 20 },
+  { name: "Canva", src: "/press/canva.svg", height: 20 },
+  { name: "Notion", src: "/press/notion.svg", height: 20 },
+  { name: "Slack", src: "/press/slack.svg", height: 20 },
+  { name: "Dropbox", src: "/press/dropbox.svg", height: 20 },
+  { name: "Shopify", src: "/press/shopify.svg", height: 18 },
+  { name: "HubSpot", src: "/press/hubspot.svg", height: 18 },
+  { name: "Salesforce", src: "/press/salesforce.svg", height: 18 },
+  { name: "Adobe", src: "/press/adobe.svg", height: 20 },
+  { name: "Airbnb", src: "/press/airbnb.svg", height: 20 },
+  { name: "Behance", src: "/press/behance.svg", height: 18 },
+  { name: "Dribbble", src: "/press/dribbble.svg", height: 18 },
+] as const;
+
 const FEATURES = [
   {
     icon: Wand2,
@@ -308,14 +374,27 @@ export function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-14 text-center">
-            <p className="text-sm font-medium text-white/50">
+          <div className="mt-14">
+            <p className="text-center text-sm font-medium text-white/50">
               Built for professional AI text refinement
             </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/25">
-              {["Forbes", "Business Insider", "Yahoo", "Product Hunt", "Medium"].map((name) => (
-                <span key={name}>{name}</span>
-              ))}
+            <div className="press-marquee mt-6 py-2" aria-label="Featured across popular brands">
+              <div className="press-marquee-track">
+                {[...PRESS_LOGOS, ...PRESS_LOGOS].map((brand, i) => (
+                  <img
+                    key={`${brand.name}-${i}`}
+                    src={brand.src}
+                    alt={brand.name}
+                    title={brand.name}
+                    height={Math.round(brand.height * 1.45)}
+                    className="w-auto shrink-0 opacity-70"
+                    style={{ height: Math.round(brand.height * 1.45) }}
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </section>
