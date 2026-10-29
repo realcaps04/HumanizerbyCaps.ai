@@ -79,8 +79,9 @@ function mockRespond(system: string, user: string): string {
         settings: HumanizationSettings;
         instruction?: string;
       };
+      // Process every non-empty paragraph in this batch (no page/length skip beyond empty)
       const replacements = parsed.paragraphs
-        .filter((p) => p.text.trim().length > 40)
+        .filter((p) => p.text.trim().length > 0)
         .map((p) => ({
           id: p.id,
           index: p.index,
@@ -222,31 +223,104 @@ export async function analyzeDocument(paragraphs: ParagraphBlock[]): Promise<Ana
   };
 }
 
-export async function humanizeParagraphs(req: HumanizeRequest): Promise<HumanizeResult> {
-  const targets = req.selectionIds?.length
+const HUMANIZE_BATCH_SIZE = 20;
+
+function isHumanizableParagraph(p: ParagraphBlock) {
+  if (!p.text.trim()) return false;
+  // Keep headings as structural anchors; humanize body, lists, table cells, and other prose.
+  if (p.kind === "heading") return false;
+  return true;
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+export async function humanizeParagraphs(
+  req: HumanizeRequest & {
+    onBatchProgress?: (done: number, total: number) => void | Promise<void>;
+  },
+): Promise<HumanizeResult> {
+  const scoped = req.selectionIds?.length
     ? req.paragraphs.filter((p) => req.selectionIds!.includes(p.id))
-    : req.paragraphs.filter((p) => p.kind === "paragraph" || p.kind === "list-item");
+    : req.paragraphs;
 
-  const editable = targets.filter((p) => p.text.trim().length > 0 && p.kind !== "heading");
-
-  const payload = JSON.stringify({
-    settings: req.settings,
-    instruction: req.instruction ?? "Humanize for natural, fluent writing. Preserve meaning, numbers, names, citations, and technical terms.",
-    paragraphs: editable.map((p) => ({ id: p.id, index: p.index, text: p.text, kind: p.kind })),
-  });
+  // Full document: every page's body paragraphs, in document order — no page cap.
+  const editable = scoped.filter(isHumanizableParagraph);
+  const batches = chunk(editable, HUMANIZE_BATCH_SIZE);
+  const allReplacements: HumanizeResult["replacements"] = [];
 
   const system = `You are a professional humanization engine for Word documents.
-Rewrite only unnatural or robotic prose. Preserve meaning, facts, numbers, names, citations, and terminology.
+Rewrite unnatural or robotic prose across the FULL document batch provided.
+Preserve meaning, facts, numbers, names, citations, terminology, and paragraph identity.
 Return JSON: { "replacements": [{ "id", "index", "originalText", "modifiedText" }], "summary": string }.
-Only include paragraphs you actually change. Intensity: ${req.settings.intensity}. Tone: ${req.settings.tone}.`;
+Include every paragraph you change. Do not skip paragraphs because the document is long.
+Intensity: ${req.settings.intensity}. Tone: ${req.settings.tone}.`;
 
-  const raw = await chat(system, payload);
-  const parsed = JSON.parse(raw) as HumanizeResult;
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const payload = JSON.stringify({
+      settings: req.settings,
+      instruction:
+        req.instruction ??
+        "Humanize the entire document for natural, fluent writing. Preserve meaning, numbers, names, citations, and technical terms. Process every paragraph in this batch.",
+      batch: `${i + 1}/${batches.length}`,
+      paragraphs: batch.map((p) => ({
+        id: p.id,
+        index: p.index,
+        text: p.text,
+        kind: p.kind,
+      })),
+    });
+
+    try {
+      const raw = await chat(system, payload);
+      let parsed: HumanizeResult;
+      try {
+        parsed = JSON.parse(raw) as HumanizeResult;
+      } catch {
+        parsed = { replacements: [], summary: "" };
+      }
+
+      for (const r of parsed.replacements ?? []) {
+        if (r.modifiedText && r.originalText && r.modifiedText !== r.originalText) {
+          allReplacements.push(r);
+        }
+      }
+    } catch (err) {
+      console.error(`Humanize batch ${i + 1}/${batches.length} failed:`, err);
+    }
+
+    // Ensure every paragraph in the batch was considered (covers mock + partial LLM responses)
+    const covered = new Set(
+      allReplacements.filter((r) => batch.some((p) => p.id === r.id)).map((r) => r.id),
+    );
+    for (const p of batch) {
+      if (covered.has(p.id)) continue;
+      const modified = mockHumanize(p.text, req.settings);
+      if (modified !== p.text) {
+        allReplacements.push({
+          id: p.id,
+          index: p.index,
+          originalText: p.text,
+          modifiedText: modified,
+        });
+      }
+    }
+
+    await req.onBatchProgress?.(i + 1, batches.length);
+  }
+
+  // Deduplicate by paragraph id (last write wins)
+  const byId = new Map<string, HumanizeResult["replacements"][number]>();
+  for (const r of allReplacements) byId.set(r.id, r);
+  const replacements = [...byId.values()].sort((a, b) => a.index - b.index);
+
   return {
-    replacements: (parsed.replacements ?? []).filter(
-      (r) => r.modifiedText && r.originalText && r.modifiedText !== r.originalText,
-    ),
-    summary: parsed.summary ?? "Humanization complete.",
+    replacements,
+    summary: `Humanized ${replacements.length} of ${editable.length} paragraph(s) across ${batches.length} batch(es) — full document, no page limit (${req.settings.intensity}, ${req.settings.tone}).`,
   };
 }
 

@@ -41,9 +41,31 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Desk around the document — does not alter page size or internal margins */
+/* Desk around the document — chrome only; never restyle page content */
 .docx-desk {
   background: #14141c;
+  font-family: initial;
+  font-size: initial;
+  font-weight: initial;
+  line-height: initial;
+  letter-spacing: normal;
+  text-align: initial;
+  color: initial;
+  -webkit-font-smoothing: auto;
+}
+
+.docx-host {
+  /* Cut off Inter / Tailwind inheritance before it reaches Word pages */
+  font-family: "Times New Roman", Times, serif;
+  font-size: 12pt;
+  font-weight: normal;
+  font-style: normal;
+  line-height: normal;
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+  color: #000;
+  -webkit-font-smoothing: auto;
 }
 
 .docx-wrapper {
@@ -52,22 +74,198 @@ body {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
+  /* Wrapper centering only — not paragraph alignment inside pages */
+  font: inherit !important;
+  color: inherit !important;
+  text-align: initial !important;
+  line-height: inherit !important;
+  letter-spacing: inherit !important;
 }
 
-/* Keep rendered Word pages white with original DOCX dimensions/margins intact */
+/*
+ * Preserve DOCX page geometry and typography from docx-preview / inline styles.
+ * Do NOT set font-family, font-size, text-align, line-height, or padding here.
+ */
 .docx-wrapper > section.docx {
   background: #ffffff !important;
-  color: #000000 !important;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.2),
     0 12px 40px rgba(0, 0, 0, 0.35) !important;
   margin-left: auto !important;
   margin-right: auto !important;
   margin-bottom: 24px !important;
-  /* Do not override width/height/padding — those come from the DOCX page setup */
+  /* width / height / padding come from the DOCX page setup */
 }
 
+/*
+ * Undo Tailwind preflight font resets inside Word content.
+ * Leave margins/padding alone so docx-preview layout stays intact.
+ */
+.docx-wrapper section.docx :where(h1, h2, h3, h4, h5, h6, p, ul, ol, li, span, a, strong, em, b, i, u, sub, sup) {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-indent: inherit;
+  text-transform: none;
+}
+
+.docx-wrapper section.docx table {
+  border-collapse: collapse;
+}
+
+.docx-wrapper section.docx img {
+  max-width: none;
+}
+
+/* Highlight must not change font metrics or alignment */
 .humanized-highlight {
   background: #fff3bf;
   border-radius: 2px;
+  font: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  font-style: inherit !important;
+  line-height: inherit !important;
+  letter-spacing: inherit !important;
+  text-align: inherit !important;
+  color: inherit !important;
+  display: inline !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  vertical-align: baseline !important;
+}
+
+/* File upload animation */
+@keyframes upload-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes upload-page-drop {
+  0% {
+    transform: translate(-50%, -8px) scale(1);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  70% {
+    transform: translate(-50%, 28px) scale(0.92);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, 40px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+@keyframes upload-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes upload-progress {
+  0% {
+    transform: translateX(-100%);
+    width: 40%;
+  }
+  50% {
+    width: 70%;
+  }
+  100% {
+    transform: translateX(250%);
+    width: 40%;
+  }
+}
+
+@keyframes upload-dot-float {
+  0% {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-22px);
+    opacity: 0;
+  }
+}
+
+.upload-ring-spin {
+  animation: upload-ring-spin 1.2s linear infinite;
+}
+
+.upload-glow {
+  animation: upload-glow-pulse 2s ease-in-out infinite;
+}
+
+.upload-page {
+  animation: upload-page-drop 1.8s ease-in-out infinite;
+}
+
+.upload-page-1 {
+  animation-delay: 0s;
+}
+
+.upload-page-2 {
+  animation-delay: 0.6s;
+}
+
+.upload-page-3 {
+  animation-delay: 1.2s;
+}
+
+.upload-progress {
+  animation: upload-progress 1.4s ease-in-out infinite;
+}
+
+.upload-dot {
+  position: absolute;
+  bottom: 2.5rem;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #c4b5fd;
+  animation: upload-dot-float 1.6s ease-in-out infinite;
+}
+
+.upload-dot-1 {
+  left: 28%;
+  animation-delay: 0.1s;
+}
+
+.upload-dot-2 {
+  left: 50%;
+  animation-delay: 0.5s;
+  background: #f0abfc;
+}
+
+.upload-dot-3 {
+  left: 68%;
+  animation-delay: 0.9s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-ring-spin,
+  .upload-glow,
+  .upload-page,
+  .upload-progress,
+  .upload-dot {
+    animation: none;
+  }
 }

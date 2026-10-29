@@ -192,23 +192,30 @@ export async function runHumanize(
   try {
     await store.updateDocument(documentId, userId, { processingStatus: "humanizing" });
     const { doc, parsed } = await getParsed(documentId, userId);
+    // Full document by default — every paragraph on every page (no page limit).
     const targets = resolveTargets(parsed, options);
     const targetWords = targets.reduce((n, p) => n + countWords(p.text), 0);
-    if (used + targetWords > limits.monthlyWordAllowance) {
+    const unlimited = !Number.isFinite(limits.monthlyWordAllowance)
+      || limits.monthlyWordAllowance >= Number.MAX_SAFE_INTEGER / 2;
+    if (!unlimited && used + targetWords > limits.monthlyWordAllowance) {
       throw new Error(
         `Monthly word allowance exceeded (${used}/${limits.monthlyWordAllowance} for ${plan})`,
       );
     }
 
-    await store.updateJob(job.id, { progress: 25 });
+    await store.updateJob(job.id, { progress: 10 });
     const result = await humanizeParagraphs({
       paragraphs: targets,
       settings,
       instruction: options.instruction,
       selectionIds: targets.map((p) => p.id),
+      onBatchProgress: async (done, total) => {
+        const pct = 10 + Math.round((done / Math.max(total, 1)) * 50);
+        await store.updateJob(job.id, { progress: pct });
+      },
     });
 
-    await store.updateJob(job.id, { progress: 60 });
+    await store.updateJob(job.id, { progress: 65 });
     const buffer = await readDocBuffer(doc.currentDocumentPath);
     const { buffer: nextBuffer, flagged } = await applyParagraphReplacements(
       buffer,

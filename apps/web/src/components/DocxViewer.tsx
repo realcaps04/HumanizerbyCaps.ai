@@ -32,7 +32,7 @@ export function DocxViewer({
       try {
         const blob = await api.fetchDocxBlob(documentId, which);
         if (cancelled || !hostRef.current) return;
-        // Preserve original page size, margins, and layout from the DOCX.
+        // Preserve original fonts, alignment, page size, and margins from the DOCX.
         await renderAsync(blob, hostRef.current, undefined, {
           className: "docx",
           inWrapper: true,
@@ -40,12 +40,14 @@ export function DocxViewer({
           ignoreHeight: false,
           ignoreFonts: false,
           breakPages: true,
+          experimental: true,
           useBase64URL: true,
           renderHeaders: true,
           renderFooters: true,
           renderFootnotes: true,
           renderEndnotes: true,
         });
+        isolateDocxTypography(hostRef.current);
         if (highlightTexts.length && hostRef.current) {
           highlightInDom(hostRef.current, highlightTexts);
         }
@@ -80,6 +82,18 @@ export function DocxViewer({
       <div ref={hostRef} className="docx-host min-h-full" />
     </div>
   );
+}
+
+/** Prevent app chrome CSS from leaking into Word content. */
+function isolateDocxTypography(root: HTMLElement) {
+  root.querySelectorAll<HTMLElement>("section.docx").forEach((page) => {
+    // Keep only page chrome from our CSS; typography stays from docx-preview inline styles.
+    page.style.setProperty("font-family", "");
+    page.style.setProperty("font-size", "");
+    page.style.setProperty("line-height", "");
+    page.style.setProperty("text-align", "");
+    page.style.setProperty("letter-spacing", "");
+  });
 }
 
 function highlightInDom(root: HTMLElement, texts: string[]) {

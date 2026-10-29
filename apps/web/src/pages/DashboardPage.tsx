@@ -12,6 +12,7 @@ import {
 import type { DashboardStats, DocumentRecord } from "@humanizer/shared";
 import { api } from "@/lib/api";
 import { Logo } from "@/components/ui";
+import { UploadAnimation } from "@/components/UploadAnimation";
 import { cn, formatDate, formatNumber } from "@/lib/utils";
 
 export function DashboardPage() {
@@ -21,6 +22,7 @@ export function DashboardPage() {
   const [docs, setDocs] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadName, setUploadName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<DocumentRecord | null>(null);
@@ -46,14 +48,15 @@ export function DashboardPage() {
       return;
     }
     setUploading(true);
+    setUploadName(file.name);
     setError(null);
     try {
       const res = await api.uploadDocument(file);
       navigate(`/app/documents/${res.document.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
       setUploading(false);
+      setUploadName(null);
     }
   }
 
@@ -168,11 +171,15 @@ export function DashboardPage() {
         <div
           className={cn(
             "mt-8 rounded-2xl border border-dashed px-6 py-12 text-center transition",
-            dragOver
-              ? "border-violet-400 bg-violet-600/20 shadow-[0_0_60px_rgba(139,92,246,0.25)]"
-              : "border-white/15 bg-white/[0.03] hover:border-violet-500/40",
+            uploading &&
+              "border-violet-400/50 bg-violet-600/10 shadow-[0_0_80px_rgba(139,92,246,0.28)]",
+            !uploading &&
+              (dragOver
+                ? "border-violet-400 bg-violet-600/20 shadow-[0_0_60px_rgba(139,92,246,0.25)]"
+                : "border-white/15 bg-white/[0.03] hover:border-violet-500/40"),
           )}
           onDragOver={(e) => {
+            if (uploading) return;
             e.preventDefault();
             setDragOver(true);
           }}
@@ -180,31 +187,30 @@ export function DashboardPage() {
           onDrop={(e) => {
             e.preventDefault();
             setDragOver(false);
-            void handleFiles(e.dataTransfer.files);
+            if (!uploading) void handleFiles(e.dataTransfer.files);
           }}
         >
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-600/20 text-violet-300">
-            {uploading ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <FileUp className="h-6 w-6" />
-            )}
-          </div>
-          <p className="mt-4 text-base font-medium">
-            {uploading ? "Uploading document…" : "Drop a .docx file here"}
-          </p>
-          <p className="mt-1 text-sm text-white/45">
-            Formatting, headings, tables, and styles are preserved.
-          </p>
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => fileRef.current?.click()}
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            <FileUp className="h-4 w-4" />
-            Browse files
-          </button>
+          {uploading ? (
+            <UploadAnimation filename={uploadName} />
+          ) : (
+            <>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-600/20 text-violet-300">
+                <FileUp className="h-6 w-6" />
+              </div>
+              <p className="mt-4 text-base font-medium">Drop a .docx file here</p>
+              <p className="mt-1 text-sm text-white/45">
+                Formatting, headings, tables, and styles are preserved.
+              </p>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="mt-5 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-2.5 text-sm font-semibold text-white"
+              >
+                <FileUp className="h-4 w-4" />
+                Browse files
+              </button>
+            </>
+          )}
         </div>
 
         {error && (

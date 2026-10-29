@@ -145,22 +145,23 @@ export interface PlanLimits {
   priorityProcessing: boolean;
 }
 
+/** No page/word caps in local product mode — humanize every page of any document. */
 export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   free: {
     plan: "free",
-    monthlyWordAllowance: 5_000,
-    maxDocuments: 10,
-    maxFileSizeMb: 5,
-    versionHistory: false,
-    advancedControls: false,
+    monthlyWordAllowance: Number.MAX_SAFE_INTEGER,
+    maxDocuments: Number.MAX_SAFE_INTEGER,
+    maxFileSizeMb: 100,
+    versionHistory: true,
+    advancedControls: true,
     teamAccess: false,
     priorityProcessing: false,
   },
   pro: {
     plan: "pro",
-    monthlyWordAllowance: 100_000,
-    maxDocuments: 200,
-    maxFileSizeMb: 25,
+    monthlyWordAllowance: Number.MAX_SAFE_INTEGER,
+    maxDocuments: Number.MAX_SAFE_INTEGER,
+    maxFileSizeMb: 100,
     versionHistory: true,
     advancedControls: true,
     teamAccess: false,
@@ -168,9 +169,9 @@ export const PLAN_LIMITS: Record<SubscriptionPlan, PlanLimits> = {
   },
   business: {
     plan: "business",
-    monthlyWordAllowance: 500_000,
-    maxDocuments: 2_000,
-    maxFileSizeMb: 50,
+    monthlyWordAllowance: Number.MAX_SAFE_INTEGER,
+    maxDocuments: Number.MAX_SAFE_INTEGER,
+    maxFileSizeMb: 100,
     versionHistory: true,
     advancedControls: true,
     teamAccess: true,
