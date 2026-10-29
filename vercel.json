@@ -7,6 +7,7 @@
       "entrypoint": "src/index.ts",
       "installCommand": "cd ../.. && npm install",
       "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && npm run build -w @humanizer/web && rm -rf apps/api/public && mkdir -p apps/api/public && cp -R apps/web/dist/. apps/api/public/ && cd apps/api && npx tsc",
+      "ignoreCommand": "exit 1",
       "functions": {
         "src/index.ts": {
           "includeFiles": "public/**"
