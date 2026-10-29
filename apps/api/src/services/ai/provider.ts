@@ -1,0 +1,305 @@
+import OpenAI from "openai";
+import { config } from "../../config.js";
+import type { HumanizationSettings, ParagraphBlock } from "@humanizer/shared";
+
+export interface HumanizeRequest {
+  paragraphs: ParagraphBlock[];
+  settings: HumanizationSettings;
+  instruction?: string;
+  selectionIds?: string[];
+}
+
+export interface HumanizeResult {
+  replacements: Array<{ id: string; index: number; originalText: string; modifiedText: string }>;
+  summary: string;
+}
+
+export interface AnalysisResult {
+  topic: string;
+  audience: string;
+  writingStyle: string;
+  repetitiveExpressions: string[];
+  technicalSections: string[];
+  citationCount: number;
+  summary: string;
+}
+
+export interface QualityResult {
+  naturalness: number;
+  readability: number;
+  sentenceVariation: number;
+  grammarQuality: number;
+  repetitiveLanguage: number;
+}
+
+async function chat(system: string, user: string): Promise<string> {
+  if (config.aiProvider === "mock" || !config.openaiApiKey) {
+    return mockRespond(system, user);
+  }
+  const client = new OpenAI({ apiKey: config.openaiApiKey });
+  const res = await client.chat.completions.create({
+    model: config.openaiModel,
+    temperature: 0.4,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    response_format: { type: "json_object" },
+  });
+  return res.choices[0]?.message?.content ?? "{}";
+}
+
+function mockRespond(system: string, user: string): string {
+  if (system.includes("analysis")) {
+    const paras = extractSample(user);
+    return JSON.stringify({
+      topic: "Document content",
+      audience: "General professional readers",
+      writingStyle: "Neutral professional prose",
+      repetitiveExpressions: findRepetitive(paras),
+      technicalSections: [],
+      citationCount: (user.match(/\(\d{4}\)|\[\d+\]/g) || []).length,
+      summary:
+        "The document uses mostly clear language with occasional formulaic phrasing typical of AI-assisted drafts. Structure is intact; flow can be improved in transitional sentences.",
+    });
+  }
+  if (system.includes("quality")) {
+    return JSON.stringify({
+      naturalness: 62,
+      readability: 71,
+      sentenceVariation: 55,
+      grammarQuality: 84,
+      repetitiveLanguage: 38,
+    });
+  }
+  if (system.includes("humaniz")) {
+    try {
+      const parsed = JSON.parse(user) as {
+        paragraphs: Array<{ id: string; index: number; text: string }>;
+        settings: HumanizationSettings;
+        instruction?: string;
+      };
+      const replacements = parsed.paragraphs
+        .filter((p) => p.text.trim().length > 40)
+        .map((p) => ({
+          id: p.id,
+          index: p.index,
+          originalText: p.text,
+          modifiedText: mockHumanize(p.text, parsed.settings),
+        }))
+        .filter((r) => r.modifiedText !== r.originalText);
+      return JSON.stringify({
+        replacements,
+        summary: `Humanized ${replacements.length} paragraph(s) with ${parsed.settings.intensity} intensity (${parsed.settings.tone} tone).`,
+      });
+    } catch {
+      return JSON.stringify({ replacements: [], summary: "No changes applied." });
+    }
+  }
+  return JSON.stringify({ reply: "I can analyze, humanize, or improve selected sections of your document." });
+}
+
+function extractSample(user: string) {
+  return user.slice(0, 4000);
+}
+
+function findRepetitive(text: string): string[] {
+  const phrases = ["In conclusion", "It is important to note", "Furthermore", "In today's world", "Moreover"];
+  return phrases.filter((p) => text.toLowerCase().includes(p.toLowerCase()));
+}
+
+function mockHumanize(text: string, settings: HumanizationSettings): string {
+  let out = text;
+  const swaps: Array<[RegExp, string]> = [
+    [/\bIn conclusion,\s*/gi, "Overall, "],
+    [/\bIt is important to note that\s*/gi, ""],
+    [/\bFurthermore,\s*/gi, "Also, "],
+    [/\bMoreover,\s*/gi, "Beyond that, "],
+    [/\bIn today's world,\s*/gi, "Today, "],
+    [/\butilize\b/gi, "use"],
+    [/\bleverage\b/gi, "use"],
+    [/\brobust\b/gi, "strong"],
+    [/\bdelve into\b/gi, "look at"],
+    [/\bcomprehensive\b/gi, "thorough"],
+    [/\bfacilitate\b/gi, "help"],
+    [/\bin order to\b/gi, "to"],
+  ];
+
+  if (settings.intensity === "light") {
+    for (const [re, rep] of swaps.slice(0, 5)) out = out.replace(re, rep);
+  } else {
+    for (const [re, rep] of swaps) out = out.replace(re, rep);
+  }
+
+  // Capitalize sentence starts after phrase removals
+  out = out.replace(/(^|[.!?]\s+)([a-z])/g, (_, a, b) => a + b.toUpperCase());
+
+  if (settings.intensity === "deep") {
+    out = out
+      .replace(/\s{2,}/g, " ")
+      .replace(/\bvery unique\b/gi, "distinct")
+      .replace(/\ba wide variety of\b/gi, "many");
+  }
+
+  if (settings.tone === "simple") {
+    out = out.replace(/\bapproximately\b/gi, "about").replace(/\bsubsequently\b/gi, "then");
+  }
+  if (settings.tone === "conversational") {
+    out = out.replace(/\bTherefore,\s*/gi, "So ");
+  }
+
+  // Light sentence-start variety for mock mode
+  if (out === text && settings.intensity !== "light" && text.length > 80) {
+    out = text.replace(/^The\s+/, "This ").replace(/^This document\s+/i, "The piece ");
+    if (out === text) {
+      const parts = text.split(/(?<=\.)\s+/);
+      if (parts.length > 2) {
+        out = parts.join(" ");
+      }
+    }
+  }
+
+  return out.trim();
+}
+
+export async function humanizePlainText(
+  text: string,
+  settings: HumanizationSettings = {
+    tone: "natural",
+    intensity: "balanced",
+    preserveStyle: true,
+    preserveTechnicalTerms: true,
+    preserveCitations: true,
+    preserveParagraphLength: true,
+    avoidVocabChanges: false,
+    doNotModifyNumbers: true,
+    onlySelectedContent: false,
+  },
+): Promise<string> {
+  if (!text.trim()) return text;
+  if (config.aiProvider === "mock" || !config.openaiApiKey) {
+    return mockHumanize(text, settings);
+  }
+  const client = new OpenAI({ apiKey: config.openaiApiKey });
+  const res = await client.chat.completions.create({
+    model: config.openaiModel,
+    temperature: 0.4,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Rewrite the user's text so it sounds natural and human. Preserve meaning, facts, numbers, names, and citations. Return only the rewritten text, no JSON or commentary.",
+      },
+      {
+        role: "user",
+        content: `Tone: ${settings.tone}. Intensity: ${settings.intensity}.\n\n${text}`,
+      },
+    ],
+  });
+  return (res.choices[0]?.message?.content ?? text).trim();
+}
+
+export async function analyzeDocument(paragraphs: ParagraphBlock[]): Promise<AnalysisResult> {
+  const sample = paragraphs
+    .filter((p) => p.text.trim())
+    .slice(0, 40)
+    .map((p) => `[${p.kind}${p.headingLevel ? ` h${p.headingLevel}` : ""}] ${p.text}`)
+    .join("\n");
+
+  const raw = await chat(
+    "You are a document analysis engine. Return JSON only with keys: topic, audience, writingStyle, repetitiveExpressions (string[]), technicalSections (string[]), citationCount (number), summary (string).",
+    sample,
+  );
+  const parsed = JSON.parse(raw) as AnalysisResult;
+  return {
+    topic: parsed.topic ?? "Unknown",
+    audience: parsed.audience ?? "General",
+    writingStyle: parsed.writingStyle ?? "Neutral",
+    repetitiveExpressions: parsed.repetitiveExpressions ?? [],
+    technicalSections: parsed.technicalSections ?? [],
+    citationCount: parsed.citationCount ?? 0,
+    summary: parsed.summary ?? "",
+  };
+}
+
+export async function humanizeParagraphs(req: HumanizeRequest): Promise<HumanizeResult> {
+  const targets = req.selectionIds?.length
+    ? req.paragraphs.filter((p) => req.selectionIds!.includes(p.id))
+    : req.paragraphs.filter((p) => p.kind === "paragraph" || p.kind === "list-item");
+
+  const editable = targets.filter((p) => p.text.trim().length > 0 && p.kind !== "heading");
+
+  const payload = JSON.stringify({
+    settings: req.settings,
+    instruction: req.instruction ?? "Humanize for natural, fluent writing. Preserve meaning, numbers, names, citations, and technical terms.",
+    paragraphs: editable.map((p) => ({ id: p.id, index: p.index, text: p.text, kind: p.kind })),
+  });
+
+  const system = `You are a professional humanization engine for Word documents.
+Rewrite only unnatural or robotic prose. Preserve meaning, facts, numbers, names, citations, and terminology.
+Return JSON: { "replacements": [{ "id", "index", "originalText", "modifiedText" }], "summary": string }.
+Only include paragraphs you actually change. Intensity: ${req.settings.intensity}. Tone: ${req.settings.tone}.`;
+
+  const raw = await chat(system, payload);
+  const parsed = JSON.parse(raw) as HumanizeResult;
+  return {
+    replacements: (parsed.replacements ?? []).filter(
+      (r) => r.modifiedText && r.originalText && r.modifiedText !== r.originalText,
+    ),
+    summary: parsed.summary ?? "Humanization complete.",
+  };
+}
+
+export async function evaluateQuality(paragraphs: ParagraphBlock[]): Promise<QualityResult> {
+  const sample = paragraphs
+    .filter((p) => p.text.trim())
+    .slice(0, 30)
+    .map((p) => p.text)
+    .join("\n");
+  const raw = await chat(
+    "You are a writing quality evaluator. Return JSON with numeric scores 0-100: naturalness, readability, sentenceVariation, grammarQuality, repetitiveLanguage.",
+    sample,
+  );
+  const parsed = JSON.parse(raw) as QualityResult;
+  return {
+    naturalness: clamp(parsed.naturalness ?? 60),
+    readability: clamp(parsed.readability ?? 65),
+    sentenceVariation: clamp(parsed.sentenceVariation ?? 55),
+    grammarQuality: clamp(parsed.grammarQuality ?? 80),
+    repetitiveLanguage: clamp(parsed.repetitiveLanguage ?? 40),
+  };
+}
+
+export async function agentReply(input: {
+  message: string;
+  documentSummary: string;
+}): Promise<string> {
+  if (config.aiProvider === "mock" || !config.openaiApiKey) {
+    const m = input.message.toLowerCase();
+    if (m.includes("analyze")) return "I'll analyze the document structure, style, and unnatural phrasing next.";
+    if (m.includes("humanize") && m.includes("introduction"))
+      return "I'll humanize the introduction while preserving meaning and formatting.";
+    if (m.includes("humanize")) return "I'll humanize the document with your current settings and show changes for review.";
+    if (m.includes("grammar")) return "I'll improve grammar without altering meaning.";
+    if (m.includes("restore") || m.includes("original")) return "I can restore the original uploaded document.";
+    return "I can analyze the document, humanize all or part of it, improve readability, or restore the original. What would you like to do?";
+  }
+  const client = new OpenAI({ apiKey: config.openaiApiKey });
+  const res = await client.chat.completions.create({
+    model: config.openaiModel,
+    temperature: 0.5,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are HumanizerbyCaps.ai's writing agent. Be concise, professional, and focused on document editing. Never claim detector scores you cannot verify.",
+      },
+      { role: "user", content: `Document context:\n${input.documentSummary}\n\nUser: ${input.message}` },
+    ],
+  });
+  return res.choices[0]?.message?.content ?? "How can I help with this document?";
+}
+
+function clamp(n: number) {
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
