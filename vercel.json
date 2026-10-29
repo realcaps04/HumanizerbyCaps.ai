@@ -6,14 +6,39 @@
       "framework": "express",
       "entrypoint": "src/index.ts",
       "installCommand": "cd ../.. && npm install",
-      "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && npm run build -w @humanizer/web && rm -rf apps/api/public && mkdir -p apps/api/public && cp -R apps/web/dist/. apps/api/public/ && cd apps/api && npx tsc"
+      "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && cd apps/api && npx tsc"
+    },
+    "web": {
+      "root": "apps/web",
+      "framework": "vite",
+      "installCommand": "cd ../.. && npm install",
+      "buildCommand": "cd ../.. && npx tsc -p packages/shared/tsconfig.json && cd apps/web && npx tsc -b && npx vite build",
+      "outputDirectory": "dist",
+      "rewrites": [
+        {
+          "source": "/(.*)",
+          "destination": "/index.html"
+        }
+      ]
     }
   },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/(.*)",
       "destination": {
         "service": "api"
+      }
+    },
+    {
+      "source": "/health",
+      "destination": {
+        "service": "api"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "web"
       }
     }
   ]
